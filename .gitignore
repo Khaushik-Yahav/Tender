@@ -1,0 +1,14 @@
+# Python virtualenv
+venv/
+.env
+*.pyc
+__pycache__/
+*.pkl
+*.sqlite3
+.DS_Store
+node_modules/
+data/
+uploads/
+
+# VSCode
+.vscode/

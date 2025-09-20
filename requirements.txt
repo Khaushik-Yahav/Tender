@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+langchain
+openai
+faiss-cpu
+pytesseract
+Pillow
+scikit-learn
+xgboost
+python-docx
+axios
+react
+langchain-community
+python-multipart
+
