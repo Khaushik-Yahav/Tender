@@ -1,0 +1,6 @@
+pymupdf
+python-docx
+pandas
+# Optional LLM support:
+transformers>=4.0.0
+torch   # If you want CPU-only, install wheel suitable for your OS (see notes)

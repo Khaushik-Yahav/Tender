@@ -1,0 +1,76 @@
+.dashboard {
+  display: flex;
+  min-height: 100vh;
+  background-color: #f4f6f8;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.sidebar {
+  width: 220px;
+  background-color: #1f2937;
+  color: #fff;
+  padding: 20px;
+  flex-shrink: 0;
+}
+
+.sidebar h2 {
+  font-size: 1.6rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+}
+
+.sidebar ul li {
+  padding: 12px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.sidebar ul li:hover,
+.sidebar ul li.active {
+  background-color: #374151;
+}
+
+.main-content {
+  flex-grow: 1;
+  padding: 30px;
+}
+
+.summary-card {
+  background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+  color: #000;
+  font-weight: 600;
+  text-align: center;
+  border: none;
+}
+
+.upload-form {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.upload-form input[type="file"] {
+  flex-grow: 1;
+}
+
+.card-title {
+  font-weight: 600;
+}
+
+.table {
+  background-color: #fff;
+}
+
+.progress {
+  height: 25px;
+}

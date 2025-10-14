@@ -1,0 +1,16 @@
+[
+  {
+    "filename": "AGRA-NB-1346_SUPPLIER[1].pdf",
+    "features": {
+      "technical_clarity": 0.851,
+      "pricing_transparency": 0.665,
+      "timeline_feasibility": 0.782,
+      "scope_similarity_score": 0.797,
+      "compliance_adherence": 0.675,
+      "risk_mitigation": 0.557,
+      "topic_coverage_score": 0.524
+    },
+    "final_score": 71.52,
+    "timestamp": "2025-10-14 13:40:43"
+  }
+]

@@ -1,0 +1,64 @@
+# --- Global ignores ---
+.DS_Store
+Thumbs.db
+
+# --- Python backend ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.sqlite3
+env/
+venv/
+ENV/
+.venv/
+.env
+backend/__pycache__/
+backend/uploaded_files/
+backend/*.db
+
+# --- Node/React frontend ---
+tender-frontend/node_modules/
+tender-frontend/.pnp
+tender-frontend/.pnp.js
+tender-frontend/build/
+tender-frontend/.env
+tender-frontend/npm-debug.log*
+tender-frontend/yarn-debug.log*
+tender-frontend/yarn-error.log*
+
+# --- IDE / Editors ---
+.vscode/
+.idea/
+*.swp
+
+# --- OS generated ---
+ehthumbs.db
+Icon?
+
+# Ignore virtual environments
+venv/
+.env
+__pycache__/
+
+# Node / React
+node_modules/
+build/
+dist/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# OS / IDE
+.DS_Store
+.env
+*.log
+.idea/
+.vscode/
+
+
