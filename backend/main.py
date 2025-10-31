@@ -1,6 +1,7 @@
 """
 main.py
 Main FastAPI application for Tender Compliance System
+RAG-based requirements extraction
 """
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
@@ -18,8 +19,8 @@ from database import db
 # Initialize FastAPI app
 app = FastAPI(
     title="Tender Compliance System",
-    description="AI-Based Tender Requirements Compliance Checker",
-    version="2.0.0"
+    description="AI-Based Tender Requirements Compliance Checker with RAG",
+    version="3.0.0"
 )
 
 # CORS middleware
@@ -32,67 +33,54 @@ app.add_middleware(
 )
 
 print("\n" + "="*70)
-print("🚀 INITIALIZING TENDER COMPLIANCE SYSTEM")
+print("🚀 SYSTEM INITIALIZATION - RAG VERSION")
 print("="*70)
 
-# Import and initialize extractors
+# Load config
+print("\n📋 Loading configuration...")
+try:
+    from config import config
+    print("✅ Configuration loaded")
+except Exception as e:
+    print(f"❌ Config error: {e}")
+    import sys
+    sys.exit(1)
+
+# Import extractors
+print("\n📖 Importing extractors...")
+from requirements_extractor import RequirementsExtractor
+
+# Initialize requirements extractor
 requirements_extractor = None
 
+print("\n🤖 Initializing RAG Requirements Extractor...")
 try:
-    print("\n📋 Loading configuration...")
-    from config import config
-    
-    print("\n🔍 Checking LLM configuration...")
-    if config.USE_LLM_EXTRACTION:
-        print("   ✅ LLM extraction is ENABLED in config")
-        
-        if config.GROQ_API_KEY:
-            print(f"   ✅ GROQ_API_KEY found: {config.GROQ_API_KEY[:10]}...{config.GROQ_API_KEY[-4:]}")
-            
-            try:
-                print("\n🤖 Initializing LLM Requirements Extractor...")
-                from llm_requirements_extractor import LLMRequirementsExtractor
-                requirements_extractor = LLMRequirementsExtractor(
-                    api_key=config.GROQ_API_KEY,
-                    model=config.GROQ_MODEL
-                )
-                print("   ✅ LLM extractor initialized successfully!")
-                
-            except Exception as e:
-                print(f"   ❌ Failed to initialize LLM extractor: {e}")
-                print("   ⚠️ Falling back to basic extractor")
-                from requirements_extractor import RequirementsExtractor
-                requirements_extractor = RequirementsExtractor()
-        else:
-            print("   ❌ GROQ_API_KEY not found in environment!")
-            print("   ⚠️ Please set GROQ_API_KEY in .env file")
-            print("   ⚠️ Falling back to basic extractor")
-            from requirements_extractor import RequirementsExtractor
-            requirements_extractor = RequirementsExtractor()
-    else:
-        print("   ℹ️ LLM extraction is DISABLED in config")
-        print("   📝 Using basic requirements extractor")
-        from requirements_extractor import RequirementsExtractor
-        requirements_extractor = RequirementsExtractor()
-        
-except ImportError as e:
-    print(f"\n❌ Error importing modules: {e}")
-    print("⚠️ Falling back to basic extractor")
-    from requirements_extractor import RequirementsExtractor
-    requirements_extractor = RequirementsExtractor()
+    from extractor import Extractor
+    requirements_extractor = Extractor(
+        api_key=config.GROQ_API_KEY,
+        model=config.GROQ_MODEL
+    )
+    print("✅ RAG extractor ready")
+except Exception as e:
+    print(f"❌ RAG init failed: {e}")
+    print("⚠️ Cannot continue without RAG extractor")
+    import sys
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
 
 # Initialize compliance checker
 print("\n🔍 Initializing compliance checker...")
 from compliance_checker import ComplianceChecker
 compliance_checker = ComplianceChecker()
-print("   ✅ Compliance checker initialized")
+print("✅ Compliance checker ready")
 
-# Ensure data directories exist
+# Create data directories
 os.makedirs("data/tenders", exist_ok=True)
 os.makedirs("data/uploaded_files", exist_ok=True)
 
 print("\n" + "="*70)
-print("✅ INITIALIZATION COMPLETE")
+print("✅ READY - RAG SYSTEM ACTIVE")
 print("="*70 + "\n")
 
 @app.on_event("startup")
@@ -108,14 +96,11 @@ async def root():
     """Root endpoint"""
     tenders = db.get_all_tenders()
     
-    # Check which extractor is being used
-    extractor_type = "LLM-based (Groq)" if "LLM" in type(requirements_extractor).__name__ else "Basic keyword-based"
-    
     return {
         "message": "Tender Compliance System API",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "status": "running",
-        "extractor_type": extractor_type,
+        "extraction_method": "RAG (Retrieval Augmented Generation)",
         "total_tenders": len(tenders),
         "endpoints": {
             "docs": "/docs",
@@ -207,7 +192,7 @@ async def delete_tender(tender_id: str):
 
 @app.post("/api/tenders/{tender_id}/requirements")
 async def upload_requirements(tender_id: str, file: UploadFile = File(...)):
-    """Upload government requirements document"""
+    """Upload government requirements document with RAG extraction"""
     try:
         tender = db.get_tender(tender_id)
         if not tender:
@@ -222,14 +207,13 @@ async def upload_requirements(tender_id: str, file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, f)
         
         print(f"\n{'='*70}")
-        print(f"📄 REQUIREMENTS EXTRACTION STARTED")
+        print(f"📄 RAG REQUIREMENTS EXTRACTION")
         print(f"{'='*70}")
         print(f"File: {filename}")
         print(f"Tender: {tender.get('tender_name')}")
         
         # Extract text from file
-        print(f"\n📖 Extracting text from file...")
-        from requirements_extractor import RequirementsExtractor
+        print(f"\n📖 STEP 1: Extracting text from file...")
         basic_extractor = RequirementsExtractor()
         
         ext = filepath.lower().split('.')[-1]
@@ -241,35 +225,29 @@ async def upload_requirements(tender_id: str, file: UploadFile = File(...)):
             with open(filepath, 'r', encoding='utf-8') as f:
                 document_text = f.read()
         
-        print(f"✅ Extracted {len(document_text)} characters of text")
+        print(f"✅ Extracted {len(document_text)} characters")
         
-        # Use the configured extractor
-        print(f"\n🔍 Using extractor: {type(requirements_extractor).__name__}")
-        
-        if "LLM" in type(requirements_extractor).__name__:
-            print("🤖 Using LLM-based extraction (Groq AI)")
-            requirements = requirements_extractor.extract_requirements(document_text)
-        else:
-            print("📝 Using basic keyword extraction")
-            requirements = requirements_extractor.extract_requirements(filepath)
+        # Extract requirements using RAG
+        print(f"\n🎯 STEP 2: RAG extraction...")
+        final_requirements = requirements_extractor.extract(document_text)
         
         # Update tender
         tender["requirements_document"] = filename
-        tender["requirements"] = [req.dict() for req in requirements]
-        tender["total_requirements"] = len(requirements)
+        tender["requirements"] = [req.dict() for req in final_requirements]
+        tender["total_requirements"] = len(final_requirements)
         
         db.update_tender(tender_id, tender)
         
         print(f"\n{'='*70}")
-        print(f"✅ EXTRACTION COMPLETE: {len(requirements)} requirements")
+        print(f"✅ EXTRACTION COMPLETE: {len(final_requirements)} requirements")
         print(f"{'='*70}\n")
         
         return {
             "success": True,
             "message": "Requirements uploaded and extracted successfully",
-            "total_requirements": len(requirements),
-            "extraction_method": "LLM" if "LLM" in type(requirements_extractor).__name__ else "Basic",
-            "requirements": [req.dict() for req in requirements]
+            "total_requirements": len(final_requirements),
+            "extraction_method": "RAG (Retrieval Augmented Generation)",
+            "requirements": [req.dict() for req in final_requirements]
         }
     
     except Exception as e:
