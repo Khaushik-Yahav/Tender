@@ -107,6 +107,10 @@ function App() {
                 handleViewChange('list');
               }}
               onBack={() => handleViewChange('list')}
+              // 🔹 NEW: when child asks to view a report, go to report view
+              onViewReport={(companyName) =>
+                handleViewChange('report', selectedTender, companyName)
+              }
             />
           )}
 
@@ -114,7 +118,8 @@ function App() {
             <ComplianceReport
               tender={selectedTender}
               companyName={selectedCompany}
-              onBack={() => handleViewChange('list')}
+              // 🔹 Go back to company submission screen for this tender
+              onBack={() => handleViewChange('submit', selectedTender)}
             />
           )}
 
@@ -125,9 +130,7 @@ function App() {
             />
           )}
 
-          {activeView === 'stats' && (
-            <Statistics />
-          )}
+          {activeView === 'stats' && <Statistics />}
         </Container>
       </div>
     </div>

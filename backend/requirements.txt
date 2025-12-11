@@ -14,3 +14,6 @@ transformers==4.36.2
 faiss-cpu
 numpy
 scikit-learn
+openai>=1.0.0
+requests>=2.28
+

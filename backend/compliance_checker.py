@@ -1,22 +1,39 @@
 """
 compliance_checker.py
 Check compliance of company submissions against requirements
-Uses keyword matching and fuzzy string matching (no ML dependencies)
+
+Now uses:
+- keyword matching
+- fuzzy string matching (SequenceMatcher)
+- semantic similarity (sentence-transformers embeddings)
 """
 
 import re
-from typing import List, Dict, Tuple
+from typing import List, Dict
 from difflib import SequenceMatcher
-from models import Requirement, ComplianceResult, ComplianceReport
+
 import fitz
 import docx
+import numpy as np
+from sentence_transformers import SentenceTransformer
+
+from models import Requirement, ComplianceResult, ComplianceReport
+
 
 class ComplianceChecker:
     
     def __init__(self):
+        # thresholds for overall confidence
         self.similarity_threshold_high = 0.6  # Strong match
         self.similarity_threshold_medium = 0.4  # Partial match
-        print("✅ Compliance Checker initialized (using keyword matching)")
+
+        print("✅ Compliance Checker initialized (keyword + fuzzy + semantic matching)")
+
+        # Load semantic model for contextual matching
+        print("📥 Loading semantic model for compliance checking...")
+        self.emb_model = SentenceTransformer("all-MiniLM-L6-v2")
+        self.emb_dim = self.emb_model.get_sentence_embedding_dimension()
+        print("✅ Semantic model loaded for compliance checking")
     
     def extract_text_from_file(self, filepath: str) -> str:
         """Extract text from various file formats"""
@@ -48,15 +65,6 @@ class ComplianceChecker:
     ) -> ComplianceReport:
         """
         Check compliance of company documents against requirements
-        
-        Args:
-            requirements: List of Requirement objects
-            company_documents: Dict of document_type: filepath
-            company_name: Name of company
-            tender_id: Tender ID
-        
-        Returns:
-            ComplianceReport object
         """
         # Extract text from all company documents
         all_company_text = ""
@@ -66,18 +74,31 @@ class ComplianceChecker:
         
         # Split into sentences for better matching
         sentences = self._split_into_sentences(all_company_text)
+
+        # Pre-compute sentence embeddings for semantic similarity
+        if sentences:
+            sentence_embeddings = self.emb_model.encode(
+                sentences, convert_to_numpy=True
+            )
+        else:
+            sentence_embeddings = np.zeros((0, self.emb_dim), dtype=np.float32)
         
         # Analyze each requirement
-        detailed_results = []
-        requirements_met = []
-        requirements_missing = []
-        requirements_partial = []
+        detailed_results: List[ComplianceResult] = []
+        requirements_met: List[str] = []
+        requirements_missing: List[str] = []
+        requirements_partial: List[str] = []
         
         print(f"Analyzing {len(requirements)} requirements for {company_name}...")
         
         for idx, req in enumerate(requirements, 1):
             print(f"  [{idx}/{len(requirements)}] Checking {req.req_id}...")
-            result = self._analyze_requirement(req, sentences, all_company_text)
+            result = self._analyze_requirement(
+                requirement=req,
+                sentences=sentences,
+                full_text=all_company_text,
+                sentence_embeddings=sentence_embeddings
+            )
             detailed_results.append(result)
             
             if result.status == "met":
@@ -112,69 +133,117 @@ class ComplianceChecker:
     
     def _split_into_sentences(self, text: str) -> List[str]:
         """Split text into sentences"""
-        # Simple sentence splitting
         sentences = re.split(r'[.!?]+', text)
         # Clean and filter
         sentences = [s.strip() for s in sentences if len(s.strip()) > 20]
         return sentences
     
-    def _analyze_requirement(self, requirement: Requirement, sentences: List[str], full_text: str) -> ComplianceResult:
+    def _analyze_requirement(
+        self,
+        requirement: Requirement,
+        sentences: List[str],
+        full_text: str,
+        sentence_embeddings: np.ndarray
+    ) -> ComplianceResult:
         """
         Analyze if a requirement is met using:
         1. Keyword matching
         2. Fuzzy string matching
-        3. Pattern matching
+        3. Pattern / key-term matching
+        4. Semantic similarity (embeddings)
         """
         req_text = requirement.requirement_text.lower()
         req_keywords = [kw.lower() for kw in requirement.keywords]
-        
-        matched_sections = []
+
+        matched_sections: List[str] = []
         max_similarity = 0.0
         keyword_match_count = 0
         
-        # Method 1: Check for exact keyword matches
+        # Method 1: keyword occurrences in full text
         full_text_lower = full_text.lower()
         for keyword in req_keywords:
-            if keyword in full_text_lower:
+            if keyword and keyword in full_text_lower:
                 keyword_match_count += 1
         
-        # Method 2: Fuzzy string matching with sentences
+        # Method 2: Fuzzy similarity vs sentences (SequenceMatcher)
         for sentence in sentences:
             sentence_lower = sentence.lower()
-            
             # Calculate similarity
-            similarity = self._calculate_similarity(req_text, sentence_lower)
-            
-            if similarity > self.similarity_threshold_medium:
-                matched_sections.append(sentence[:200] + "...")
-                max_similarity = max(max_similarity, similarity)
+            sim = self._calculate_similarity(req_text, sentence_lower)
+            if sim > self.similarity_threshold_medium:
+                if sentence[:200] + "..." not in matched_sections:
+                    matched_sections.append(sentence[:200] + "...")
+                if sim > max_similarity:
+                    max_similarity = sim
         
-        # Method 3: Check for requirement-specific patterns
+        # Method 3: requirement-specific key-term pattern match
         pattern_match = self._check_patterns(requirement, full_text_lower)
-        
-        # Combine all matching methods
+
+        # Method 4: semantic similarity using embeddings (context checking)
+        semantic_score = 0.0
+
+        if len(sentences) > 0 and sentence_embeddings.shape[0] == len(sentences):
+            try:
+                # embed requirement text
+                req_emb = self.emb_model.encode(
+                    [requirement.requirement_text], convert_to_numpy=True
+                )[0]
+
+                # cosine similarity
+                sent_norms = np.linalg.norm(sentence_embeddings, axis=1) + 1e-8
+                req_norm = np.linalg.norm(req_emb) + 1e-8
+                sims = (sentence_embeddings @ req_emb) / (sent_norms * req_norm)
+
+                semantic_score = float(sims.max())
+                # top 3 semantically closest sentences
+                top_idx = sims.argsort()[-3:][::-1]
+                for i in top_idx:
+                    if 0 <= i < len(sentences):
+                        snippet = sentences[i][:200] + "..."
+                        if snippet not in matched_sections:
+                            matched_sections.append(snippet)
+            except Exception as e:
+                print(f"   ⚠️ Semantic similarity error for {requirement.req_id}: {e}")
+                semantic_score = 0.0
+
+        # Combine all matching methods into one confidence
+        keyword_score = (keyword_match_count / len(req_keywords)) if req_keywords else 0.0
+
         total_confidence = max(
             max_similarity,
-            (keyword_match_count / len(req_keywords)) if req_keywords else 0,
-            pattern_match
+            keyword_score,
+            pattern_match,
+            semantic_score
         )
-        
+
         # Determine status
-        if total_confidence >= self.similarity_threshold_high or keyword_match_count >= len(req_keywords) * 0.7:
+        if total_confidence >= self.similarity_threshold_high or keyword_score >= max(1, int(len(req_keywords) * 0.7)):
             status = "met"
-            reasoning = f"Strong match found (confidence: {total_confidence:.2f}, keywords: {keyword_match_count}/{len(req_keywords)})"
-        elif total_confidence >= self.similarity_threshold_medium or keyword_match_count >= 2:
+            reasoning = (
+                f"Strong match (overall confidence: {total_confidence:.2f}; "
+                f"keywords matched: {keyword_match_count}/{len(req_keywords)}; "
+                f"semantic: {semantic_score:.2f})"
+            )
+        elif total_confidence >= self.similarity_threshold_medium or keyword_match_count >= 1:
             status = "partial"
-            reasoning = f"Partial match found (confidence: {total_confidence:.2f}, keywords: {keyword_match_count}/{len(req_keywords)})"
+            reasoning = (
+                f"Partial match (overall confidence: {total_confidence:.2f}; "
+                f"keywords matched: {keyword_match_count}/{len(req_keywords)}; "
+                f"semantic: {semantic_score:.2f})"
+            )
         else:
             status = "missing"
-            reasoning = f"No significant match found (confidence: {total_confidence:.2f})"
+            reasoning = (
+                f"No significant match found (overall confidence: {total_confidence:.2f}; "
+                f"semantic: {semantic_score:.2f})"
+            )
         
         return ComplianceResult(
             req_id=requirement.req_id,
             requirement_text=requirement.requirement_text,
             status=status,
             confidence_score=round(total_confidence, 3),
+            semantic_score=round(semantic_score, 3), 
             matched_sections=matched_sections[:3],  # Top 3 matches
             reasoning=reasoning
         )

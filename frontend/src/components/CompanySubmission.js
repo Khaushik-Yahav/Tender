@@ -5,7 +5,7 @@ import axios from 'axios';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
 
-function CompanySubmission({ tender, onSuccess, onBack }) {
+function CompanySubmission({ tender, onSuccess, onBack, onViewReport }) {
   const [companyName, setCompanyName] = useState('');
   const [documentType, setDocumentType] = useState('proposal');
   const [file, setFile] = useState(null);
@@ -249,11 +249,9 @@ function CompanySubmission({ tender, onSuccess, onBack }) {
                           size="sm"
                           variant="info"
                           onClick={() => {
-                            // Navigate to report view
-                            // Since we're using component-based routing
-                            // We'll need to handle this differently
-                            console.log('View report for:', name);
-                            alert('Report viewing will be implemented in the parent component');
+                            if (onViewReport) {
+                              onViewReport(name);
+                            }
                           }}
                         >
                           View Report

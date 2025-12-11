@@ -57,10 +57,10 @@ print("\n🤖 Initializing RAG Requirements Extractor...")
 try:
     from extractor import Extractor
     requirements_extractor = Extractor(
-        api_key=config.GROQ_API_KEY,
-        model=config.GROQ_MODEL
+        api_key=config.OPENAI_API_KEY,   # 🔄 changed from GROQ_API_KEY
+        model=config.OPENAI_MODEL        # 🔄 changed from GROQ_MODEL
     )
-    print("✅ RAG extractor ready")
+    print("✅ RAG extractor ready (OpenAI)")
 except Exception as e:
     print(f"❌ RAG init failed: {e}")
     print("⚠️ Cannot continue without RAG extractor")
